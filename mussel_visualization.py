@@ -360,10 +360,10 @@ def display_feature_vs_target_analysis(df, year_range, location_selection):
                     
                     # Filter the data for the specific system and plot location
                     df_location = df_filtered[(df_filtered['System'] == system) & 
-                                              (df_filtered['Plot Location'] == plot_location)].dropna()
+                                              (df_filtered['Plot Location'] == plot_location)].dropna(subset=[selected_feature, 'Growth (g per day)'])
                     
                     # Group by 'Month' and 'Monitoring Period', and calculate the mean for the selected feature and target
-                    df_grouped = df_location.groupby(['Month', 'Monitoring Period']).mean().reset_index()
+                    df_grouped = df_location.groupby(['Month', 'Monitoring Period'])[[selected_feature, 'Growth (g per day)']].mean().reset_index()
                     
                     # Sort the grouped data by 'Monitoring Period'
                     df_grouped.sort_values(by='Monitoring Period', inplace=True)
@@ -378,10 +378,10 @@ def display_feature_vs_target_analysis(df, year_range, location_selection):
         else:
             # If no specific locations are selected, plot the data for each system
             for system in df['System'].unique():
-                df_system = df_filtered[df_filtered['System'] == system].dropna()
+                df_system = df_filtered[df_filtered['System'] == system].dropna(subset=[selected_feature, 'Growth (g per day)'])
                 
                 # Group by 'Month' and 'Monitoring Period', and calculate the mean for the selected feature and target
-                df_grouped = df_system.groupby(['Month', 'Monitoring Period']).mean().reset_index()
+                df_grouped = df_system.groupby(['Month', 'Monitoring Period'])[[selected_feature, 'Growth (g per day)']].mean().reset_index()
                 
                 # Sort the grouped data by 'Monitoring Period'
                 df_grouped.sort_values(by='Monitoring Period', inplace=True)
@@ -719,7 +719,7 @@ def main():
                 if verify_access_code(access_code):
                     # If the access code is correct, set 'access_granted' to True and refresh the page
                     st.session_state.access_granted = True
-                    st.experimental_rerun()  # Refresh the page to reload with granted access
+                    st.experimental_rerun()()  # Refresh the page to reload with granted access
                 else:
                     # If the access code is incorrect, display an error message
                     st.error("Access denied. Please enter the correct access code.")
