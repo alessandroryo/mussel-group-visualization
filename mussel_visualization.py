@@ -19,7 +19,6 @@ import plotly.express as px
 # Matplotlib for additional plotting utilities
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.cm import get_cmap
 
 # Joblib for model serialization
 import joblib
