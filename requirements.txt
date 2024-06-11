@@ -4,5 +4,7 @@ folium
 streamlit_folium
 numpy
 plotly
-matplotlib
+matplotlib==3.4.3
+geopandas
+shapely
 joblib
