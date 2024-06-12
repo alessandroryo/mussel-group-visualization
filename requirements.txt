@@ -1,11 +1,7 @@
 streamlit
 pandas
-folium
-streamlit_folium
 numpy
 plotly
-matplotlib==3.4.3
-geopandas
-shapely
+matplotlib==3.7.1
 joblib
-scikit-learn==0.24.2
+scikit-learn==1.2.2

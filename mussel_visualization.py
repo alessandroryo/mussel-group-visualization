@@ -5,10 +5,6 @@ import streamlit as st
 # Pandas for data manipulation and analysis
 import pandas as pd
 
-# Folium and streamlit_folium for interactive maps
-import folium
-from streamlit_folium import folium_static, st_folium
-
 # NumPy for numerical operations
 import numpy as np
 
@@ -28,10 +24,6 @@ import hashlib
 
 # Math functions for distance calculations
 from math import radians, sin, cos, sqrt, atan2
-
-# OS for file operations (not used, can be removed if not needed)
-import os
-
 
 access_granted = False
 
@@ -559,20 +551,7 @@ def predict_growth(year, lat, lon, initial_weight, depth, avg_flow_speed, max_fl
         input_df = pd.DataFrame(input_data)
 
         # Predict growth using the trained model
-        prediction = loaded_model.predict(input_df[['Monitoring Period',
-            'Year',
-            'Depth (m)',
-            'Average Flow Speed (mps)',
-            'Maximum Flow Speed (mps)',
-            'Water Temperature (C)',
-            'Chlorophyll',
-            'Turbidity (FTU)', 
-            'Precipitation',
-            'Individual Weight (g)_lag',
-            'Water Temperature (C)_lag',
-            'Chlorophyll_lag',
-            'Turbidity (FTU)_lag',
-            'Precipitation_lag']])[0]
+        prediction = loaded_model.predict(input_df[['Monitoring Period', 'Year', 'Depth (m)', 'Average Flow Speed (mps)', 'Maximum Flow Speed (mps)', 'Water Temperature (C)', 'Chlorophyll', 'Turbidity (FTU)', 'Precipitation', 'Individual Weight (g)_lag', 'Water Temperature (C)_lag', 'Chlorophyll_lag', 'Turbidity (FTU)_lag', 'Precipitation_lag']])[0]
         predictions.append(prediction)
         
         # Update initial_weight for next period
