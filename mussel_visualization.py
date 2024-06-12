@@ -331,6 +331,13 @@ def display_feature_vs_target_analysis(df, year_range, location_selection):
     """
     st.header("🔍 Growth (g per day) Feature Analysis")  # Header for the analysis section
     
+    # Add a custom information box
+    st.markdown("""
+        <div style="background-color: #fff3cd; padding: 10px; border-radius: 5px; color: #856404; font-size: 16px; margin-bottom: 20px;">
+            <strong>Note</strong>: Please note that the visualizations are generated directly from the raw data. They may present insights that differ from your existing knowledge or expectations. Additionally, the selection of years and locations will influence the data presented in these visualizations.
+        </div>
+    """, unsafe_allow_html=True)
+    
     # Define the available metrics
     metrics = ['Growth (g per day)', 'Chlorophyll (mg per m3)', 'Sea Surface Temperature (C)', 
                'Turbidity (FTU)', 'Precipitation', 'Individual Weight (g)', 
@@ -410,29 +417,33 @@ def display_feature_vs_target_analysis(df, year_range, location_selection):
         # Display the figure
         st.plotly_chart(fig, use_container_width=True)
         
-def display_location_rankings(df):
+def display_location_rankings(df, year_range):
     """
-    Displays a ranking table of locations based on the average of selected metrics over all years.
+    Displays a ranking table of locations based on the average of selected metrics for the given years.
 
     Args:
         df (pd.DataFrame): The DataFrame containing the data.
+        year_range (list): The list of selected years.
     """
+    # Filter the dataframe for the selected years
+    df_filtered = df[df['Year'].isin(year_range)]
+    
     # Select the metrics to rank locations
     metrics = ['Growth (g per day)', 'Precipitation', 'Sea Surface Temperature (C)', 'Chlorophyll (mg per m3)', 'Turbidity (FTU)']
     
     # Calculate the average of each metric for each location and system
-    df_rankings = df.groupby(['Plot Location', 'System'])[metrics].mean().round(2).reset_index()
+    df_rankings = df_filtered.groupby(['Plot Location', 'System'])[metrics].mean().round(4).reset_index()
     
     # Sort by 'Growth (g per day)' in descending order
     df_rankings = df_rankings.sort_values(by='Growth (g per day)', ascending=False).reset_index(drop=True)
 
     # Display the rankings table with a header
-    st.header("📊 Location Rankings Based on Average Metrics")
+    st.header(f"📊 Location Rankings Based on Average Metrics for Selected Years ({', '.join(map(str, year_range))})")
     
     # Add a custom information box
     st.markdown("""
         <div style="background-color: #fff3cd; padding: 10px; border-radius: 5px; color: #856404; font-size: 16px; margin-bottom: 20px;">
-            <strong>Note</strong>: The table below shows the ranking of locations based on the average of selected metrics over all years.
+            <strong>Note</strong>: The table below shows the ranking of locations based on the average of selected metrics for the selected years.
         </div>
     """, unsafe_allow_html=True)
     
@@ -469,110 +480,112 @@ def haversine(latitude1, longitude1, latitude2, longitude2):
 
     return distance
 
-def get_nearest_environmental_data(latitude, longitude, dataframe, month):
+def get_nearest_environmental_data(latitude, longitude, dataframe):
     """
-    Find the nearest environmental data point to a given latitude and longitude for a specific month.
+    Calculates the distance between a given location and each data point in a DataFrame containing environmental data.
+    Then, returns the first (nearest) data point for each monitoring period.
 
-    Parameters:
-    - latitude: Latitude of the target location in decimal degrees.
-    - longitude: Longitude of the target location in decimal degrees.
-    - dataframe: DataFrame containing the environmental data with 'lat' and 'lon' columns.
-    - month: The month for which to filter the data.
+    Args:
+        latitude (float): The latitude coordinate of the reference location.
+        longitude (float): The longitude coordinate of the reference location.
+        dataframe (pd.DataFrame): A DataFrame containing environmental data, including columns for 'Latitude', 'Longitude', and other relevant information.
 
     Returns:
-    - nearest_row: The row from the DataFrame that is closest to the given location for the specified month.
+        pd.DataFrame: A new DataFrame containing the nearest environmental data for each monitoring period.
     """
-    global df_environment  # Add this line
-    
-    # Filter the dataframe for the specified month
-    monthly_data = dataframe[dataframe['month'] == month].copy()
 
-    # Calculate the distance from the target location for each row in the filtered dataframe
-    monthly_data['distance'] = monthly_data.apply(
-        lambda row: haversine(latitude, longitude, row['lat'], row['lon']), axis=1
+    # Calculate the distance (in kilometers) for each data point in the DataFrame using the haversine formula
+    dataframe['distance'] = dataframe.apply(
+        lambda row: haversine(latitude, longitude, row['Latitude'], row['Longitude']), axis=1
     )
 
-    # Find the row with the minimum distance
-    nearest_row = monthly_data.loc[monthly_data['distance'].idxmin()]
-    
-    return nearest_row
+    # Sort the DataFrame by the calculated distance (ascending order)
+    dataframe = dataframe.sort_values(by='distance')
 
-def calculate_average_ash_free_dry_weight(monitoring_period):
-    """
-    Calculate the average Ash Free Dry Weight (g) for the specified monitoring period.
+    # Group the data by monitoring period and select the first (nearest) data point for each group
+    nearest_data = dataframe.groupby('Monitoring Period').first().reset_index()
 
-    Parameters:
-    - monitoring_period: The monitoring period for which to calculate the average weight.
+    return nearest_data
 
-    Returns:
-    - average_weight: The average Ash Free Dry Weight (g) for the specified period.
-    """
-    # Filter the dataframe for the specified monitoring period
-    period_data = df_modeling[df_modeling['Monitoring Period'] == monitoring_period]
-    
-    # Calculate the mean of 'Ash Free Dry Weight (g)_lag' for the filtered data
-    average_weight = period_data['Ash Free Dry Weight (g)_lag'].mean()
-    
-    return average_weight
-
-def predict_growth(latitude, longitude, initial_weight):
+def predict_growth(year, lat, lon, initial_weight, depth, avg_flow_speed, max_flow_speed):
     """
     Predict mussel growth based on user inputs and additional environmental features.
 
     Parameters:
-    - latitude: Latitude of the location.
-    - longitude: Longitude of the location.
+    - year: Year for which the prediction is to be made.
+    - lat: Latitude of the location.
+    - lon: Longitude of the location.
     - initial_weight: Initial weight of the mussel.
+    - depth: Depth of the water.
+    - avg_flow_speed: Average flow speed of the water.
+    - max_flow_speed: Maximum flow speed of the water.
 
     Returns:
     - predictions: DataFrame with columns 'Month' and 'Growth (g per day)'.
     """
-    # Get nearest environmental data for April (lag) and May (current)
-    env_data_april = get_nearest_environmental_data(latitude, longitude, df_environment, 4)
-    env_data_may = get_nearest_environmental_data(latitude, longitude, df_environment, 5)
+    # Load environmental data
+    df_environment = pd.read_csv('./Data/Environment Data.csv')
 
-    # Create input data dictionary for prediction
-    input_data = {
-        'Chlorophyll': [env_data_may.get('chlorophyll', 0)],
-        'Water Temperature (C)': [env_data_may.get('sst', 0)],
-        'Water Temperature (C)_lag': [env_data_april.get('sst', 0)],
-        'Ash Free Dry Weight (g)_lag': [calculate_average_ash_free_dry_weight(0)],
-        'Number of Days': [30],
-        'Precipitation_lag': [env_data_april.get('precipitation', 0)],
-        'Turbidity (FTU)': [env_data_may.get('turbidity', 0)],
-        'Turbidity (FTU)_lag': [env_data_april.get('turbidity', 0)],
-        'Monitoring Period': [0],
-        'Individual Weight (g)_lag': [initial_weight],
-        'Chlorophyll_lag': [env_data_april.get('chlorophyll', 0)]
-    }
+    # Get nearest environmental data for Monitoring Period 0-6
+    nearest_data = get_nearest_environmental_data(lat, lon, df_environment)
 
-    # Convert input data dictionary to DataFrame
-    input_df = pd.DataFrame(input_data)
     predictions = []
+    months = ['May', 'June', 'July', 'August', 'September', 'October']
 
-    # Perform predictions for each monitoring period from May to October
-    for period in range(1, 7):
-        # Predict growth using the loaded model
-        prediction = loaded_model.predict(input_df[[
-            'Chlorophyll', 'Water Temperature (C)', 'Water Temperature (C)_lag', 
-            'Ash Free Dry Weight (g)_lag', 'Number of Days', 'Precipitation_lag', 
-            'Turbidity (FTU)', 'Turbidity (FTU)_lag', 'Monitoring Period', 
-            'Individual Weight (g)_lag', 'Chlorophyll_lag']])[0]
+    for period in range(1, 7):  # Monitoring periods 1 to 6
+        # Get the current and previous period data
+        current_data = nearest_data[nearest_data['Monitoring Period'] == period].iloc[0]
+        lag_data = nearest_data[nearest_data['Monitoring Period'] == period - 1].iloc[0]
+        
+        # Create input data dictionary for prediction
+        input_data = {
+            'Monitoring Period': [period],
+            'Year': [year],
+            'Depth (m)': [depth],
+            'Average Flow Speed (mps)': [avg_flow_speed],
+            'Maximum Flow Speed (mps)': [max_flow_speed],
+            'Water Temperature (C)': [current_data['Water Temperature (C)']],
+            'Chlorophyll': [current_data['Chlorophyll']],
+            'Turbidity (FTU)': [current_data['Turbidity (FTU)']],
+            'Precipitation': [current_data['Precipitation']],
+            'Individual Weight (g)_lag': [initial_weight],
+            'Water Temperature (C)_lag': [lag_data['Water Temperature (C)']],
+            'Chlorophyll_lag': [lag_data['Chlorophyll']],
+            'Turbidity (FTU)_lag': [lag_data['Turbidity (FTU)']],
+            'Precipitation_lag': [lag_data['Precipitation']]
+        }
+
+        # Convert input data dictionary to DataFrame
+        input_df = pd.DataFrame(input_data)
+
+        # Predict growth using the trained model
+        prediction = loaded_model.predict(input_df[['Monitoring Period',
+            'Year',
+            'Depth (m)',
+            'Average Flow Speed (mps)',
+            'Maximum Flow Speed (mps)',
+            'Water Temperature (C)',
+            'Chlorophyll',
+            'Turbidity (FTU)', 
+            'Precipitation',
+            'Individual Weight (g)_lag',
+            'Water Temperature (C)_lag',
+            'Chlorophyll_lag',
+            'Turbidity (FTU)_lag',
+            'Precipitation_lag']])[0]
         predictions.append(prediction)
         
-        # Update input data for the next period
-        input_df['Monitoring Period'] = period
-        input_df['Growth (g per day)'] = prediction
-        input_df['Ash Free Dry Weight (g)_lag'] = calculate_average_ash_free_dry_weight(period)
+        # Update initial_weight for next period
+        initial_weight += prediction * 30  # Update the individual weight for the next month
 
     # Create a DataFrame for predictions with 'Month' and 'Growth (g per day)'
-    months = ['May', 'June', 'July', 'August', 'September', 'October']
     prediction_df = pd.DataFrame({
         'Month': months,
         'Growth (g per day)': predictions
     })
 
     return prediction_df
+
 
 def display_prediction_interface():
     """
@@ -598,7 +611,11 @@ def display_prediction_interface():
     # User inputs for prediction
     lat = st.number_input('Latitude', value=initial_lat, format="%.6f")
     lon = st.number_input('Longitude', value=initial_lon, format="%.6f")
+    year = st.number_input('Year', value=2024, min_value=2024)
     individual_weight = st.number_input('Individual Weight (g)', value=2.0, min_value=0.1)
+    depth = st.number_input('Depth (m)', value=10.0, min_value=0.1)
+    avg_flow_speed = st.number_input('Average Flow Speed (mps)', value=0.5, min_value=0.1)
+    max_flow_speed = st.number_input('Maximum Flow Speed (mps)', value=1.0, min_value=0.1)
 
     # Button click state initialization
     if 'predict_clicked' not in st.session_state:
@@ -612,7 +629,7 @@ def display_prediction_interface():
             st.session_state['predict_clicked'] = True  # Update state to indicate button was clicked
             with st.spinner('Predicting...'):
                 # Perform prediction
-                predictions_df = predict_growth(lat, lon, individual_weight)
+                predictions_df = predict_growth(year, lat, lon, individual_weight, depth, avg_flow_speed, max_flow_speed)
                 st.session_state['predictions'] = predictions_df  # Store predictions in session state
 
     # Display predictions and plot if available
@@ -690,7 +707,7 @@ def display_data(df):
     st.divider()
 
     # Display location rankings
-    display_location_rankings(df)
+    display_location_rankings(df, year_range)
     
     # Add a final divider
     st.divider()
@@ -734,12 +751,10 @@ def main():
                 """)
     else:
         # If access is granted, proceed to load necessary files
-        global loaded_model, df_environment, df_modeling  # Define as global variables
+        global loaded_model, df_modeling  # Define as global variables
 
         # Load the trained model
-        loaded_model = load_trained_model('./Data/final_ridge_model.pkl')
-        # Load the combined data
-        df_environment = load_data('./Data/combined_data.csv')
+        loaded_model = load_trained_model('./random_forest_model.pkl')
         
         # Load the main data
         df_modeling = load_data('./Data/It3 - Mussel + SatML + Weather (Lag Features).csv')
