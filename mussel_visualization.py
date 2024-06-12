@@ -174,10 +174,13 @@ def display_main_map(df, year_range, location_selection):
     # Exclude data for Monitoring Period 0
     df_filtered = df_filtered[df_filtered['Monitoring Period'] > 0]
 
+    # Select only numeric columns for aggregation
+    numeric_cols = df_filtered.select_dtypes(include=['number']).columns.tolist()
+    grouping_cols = ['lat', 'lon', 'Plot Location', 'System', 'Month', 'Monitoring Period']
+    agg_cols = [col for col in numeric_cols if col not in grouping_cols]
+
     # Group the filtered data by specific columns and calculate the mean for each group
-    df_grouped = df_filtered.groupby([
-        'lat', 'lon', 'Plot Location', 'System', 'Month', 'Monitoring Period'
-    ]).mean().round(2).reset_index()
+    df_grouped = df_filtered.groupby(grouping_cols)[agg_cols].mean().round(2).reset_index()
 
     # Rename columns for better readability in the hover information
     df_grouped.rename(columns={'lat': 'Latitude', 'lon': 'Longitude'}, inplace=True)
